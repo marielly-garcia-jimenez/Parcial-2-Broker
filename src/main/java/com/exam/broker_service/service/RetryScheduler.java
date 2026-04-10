@@ -4,6 +4,7 @@ import com.exam.broker_service.cor.RetryContext;
 import com.exam.broker_service.cor.impl.AuditHandler;
 import com.exam.broker_service.cor.impl.ExecutionHandler;
 import com.exam.broker_service.cor.impl.NotificationHandler;
+import com.exam.broker_service.cor.impl.PersistenceHandler;
 import com.exam.broker_service.model.OrderRetryJob;
 import com.exam.broker_service.model.PaymentRetryJob;
 import com.exam.broker_service.model.ProductRetryJob;
@@ -27,49 +28,59 @@ public class RetryScheduler {
     private final PaymentRetryRepository paymentRepository;
     private final ExecutionHandler executionHandler;
     private final NotificationHandler notificationHandler;
+    private final PersistenceHandler persistenceHandler;
     private final AuditHandler auditHandler;
 
     public RetryScheduler(ProductRetryRepository productRepository, 
                           OrderRetryRepository orderRepository, 
                           PaymentRetryRepository paymentRepository, 
                           ExecutionHandler executionHandler, 
-                          NotificationHandler notificationHandler, 
+                          NotificationHandler notificationHandler,
+                          PersistenceHandler persistenceHandler,
                           AuditHandler auditHandler) {
         this.productRepository = productRepository;
         this.orderRepository = orderRepository;
         this.paymentRepository = paymentRepository;
         this.executionHandler = executionHandler;
         this.notificationHandler = notificationHandler;
+        this.persistenceHandler = persistenceHandler;
         this.auditHandler = auditHandler;
     }
 
     @PostConstruct
     public void init() {
+        // Configurar Cadena de 4 Pasos según Prompt: A -> B -> C -> D
         executionHandler.setNext(notificationHandler);
-        notificationHandler.setNext(auditHandler);
+        notificationHandler.setNext(persistenceHandler);
+        persistenceHandler.setNext(auditHandler);
     }
 
     @Scheduled(fixedRate = 10000)
     public void processRetries() {
         LocalDateTime now = LocalDateTime.now();
-        log.info("Ciclo de reintento iniciado en: {}", now);
         
-        // Procesar Productos
+        // Procesar Productos con chequeo de Idempotencia
         List<ProductRetryJob> productJobs = productRepository.findByStatusAndNextRetryTimeBefore("PENDING", now);
         for (ProductRetryJob job : productJobs) {
-            executionHandler.handle(new RetryContext(job, "product", false));
+            if ("PENDING".equals(job.getStatus())) { // Idempotencia básica
+                executionHandler.handle(new RetryContext(job, "product", false));
+            }
         }
 
         // Procesar Ordenes
         List<OrderRetryJob> orderJobs = orderRepository.findByStatusAndNextRetryTimeBefore("PENDING", now);
         for (OrderRetryJob job : orderJobs) {
-            executionHandler.handle(new RetryContext(job, "order", false));
+            if ("PENDING".equals(job.getStatus())) {
+                executionHandler.handle(new RetryContext(job, "order", false));
+            }
         }
 
         // Procesar Pagos
         List<PaymentRetryJob> paymentJobs = paymentRepository.findByStatusAndNextRetryTimeBefore("PENDING", now);
         for (PaymentRetryJob job : paymentJobs) {
-            executionHandler.handle(new RetryContext(job, "payments", false));
+            if ("PENDING".equals(job.getStatus())) {
+                executionHandler.handle(new RetryContext(job, "payments", false));
+            }
         }
     }
 }

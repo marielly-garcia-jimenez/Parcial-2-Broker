@@ -9,10 +9,8 @@ import com.exam.broker_service.repository.OrderRetryRepository;
 import com.exam.broker_service.repository.PaymentRetryRepository;
 import com.exam.broker_service.repository.ProductRetryRepository;
 import com.exam.broker_service.repository.RetryJobRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -24,45 +22,35 @@ public class AuditHandler implements RetryHandler {
     private final OrderRetryRepository orderRepository;
     private final PaymentRetryRepository paymentRepository;
     private final RetryJobRepository centralRepository;
-    private final MongoTemplate mongoTemplate;
-    private final ObjectMapper objectMapper;
 
     public AuditHandler(ProductRetryRepository productRepository, 
                         OrderRetryRepository orderRepository, 
                         PaymentRetryRepository paymentRepository, 
-                        RetryJobRepository centralRepository, 
-                        MongoTemplate mongoTemplate, 
-                        ObjectMapper objectMapper) {
+                        RetryJobRepository centralRepository) {
         this.productRepository = productRepository;
         this.orderRepository = orderRepository;
         this.paymentRepository = paymentRepository;
         this.centralRepository = centralRepository;
-        this.mongoTemplate = mongoTemplate;
-        this.objectMapper = objectMapper;
     }
 
     @Override
     public void setNext(RetryHandler next) {
-        // Final step
+        // Ultimo eslabon
     }
 
     @Override
     public void handle(RetryContext context) {
-        log.info("PASO C: Actualizando estado final y auditoría centralizada");
-        String message = context.isSuccess() ? "Éxito" : "Fallo";
+        log.info("PASO D: Auditando resultado final en PostgreSQL");
         String statusStr = context.isSuccess() ? "SUCCESS" : "FAILED";
         LocalDateTime now = LocalDateTime.now();
         
         try {
-            context.getJob().setUpdateStatus("{\"status\":\"" + statusStr + "\", \"message\":\"" + message + "\"}");
-            
             if (context.isSuccess()) {
                 context.getJob().setStatus("SUCCESS");
-                Object payload = objectMapper.readValue(context.getJob().getPayload(), Object.class);
-                mongoTemplate.save(payload, "recovered_data_" + context.getServiceName());
             } else {
                 int retryCount = context.getJob().getRetryCount() + 1;
                 context.getJob().setRetryCount(retryCount);
+                // Formula Prompt: NOW() + (10s * 2^retryCount)
                 long delay = 10L * (long) Math.pow(2, retryCount);
                 context.getJob().setNextRetryTime(now.plusSeconds(delay));
                 
@@ -71,7 +59,9 @@ public class AuditHandler implements RetryHandler {
                 }
             }
             
-            // 1. Persistencia en la tabla específica
+            context.getJob().setUpdateStatus("{\"status\":\"" + statusStr + "\", \"message\":\"Paso D completado\"}");
+
+            // 1. Persistencia en tabla especifica
             String service = context.getServiceName();
             if (service.equalsIgnoreCase("product")) {
                 productRepository.save((ProductRetryJob) context.getJob());
@@ -81,21 +71,20 @@ public class AuditHandler implements RetryHandler {
                 paymentRepository.save((PaymentRetryJob) context.getJob());
             }
             
-            // 2. Sincronización con la tabla central 'retry_jobs'
+            // 2. Sincronización con tabla maestra
             centralRepository.findByEntityTypeAndEntitySpecificId(service.toUpperCase(), context.getJob().getId())
                 .ifPresent(centralJob -> {
                     centralJob.setStatus(context.getJob().getStatus());
                     centralJob.setRetryCount(context.getJob().getRetryCount());
                     centralJob.setUpdatedAt(now);
-                    centralJob.setStepStatus(String.format("{\"execution\":\"%s\", \"email\":\"%s\", \"update\":\"%s\"}", 
-                        statusStr, context.isSuccess() ? "SUCCESS" : "FAILED", statusStr));
+                    centralJob.setStepStatus(String.format("{\"A\":\"%s\", \"B\":\"SUCCESS\", \"C\":\"%s\", \"D\":\"SUCCESS\"}", 
+                        statusStr, context.isSuccess() ? "SUCCESS" : "SKIPPED"));
                     centralRepository.save(centralJob);
-                    log.info("Tabla central 'retry_jobs' actualizada para el job ID: {}", centralJob.getId());
                 });
 
-            log.info("Auditoría completada ({}) para el servicio {}", statusStr, service);
+            log.info("PASO D: Auditoria finalizada ({})", statusStr);
         } catch (Exception e) {
-            log.error("Falla crítica en PASO C y sincronización central: {}", e.getMessage());
+            log.error("Falla critica en PASO D: {}", e.getMessage());
         }
     }
 }

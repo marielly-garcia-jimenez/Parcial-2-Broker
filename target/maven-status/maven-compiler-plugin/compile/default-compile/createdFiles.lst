@@ -15,6 +15,7 @@ com\exam\broker_service\feign\OrderClient.class
 com\exam\broker_service\model\OrderRetryJob.class
 com\exam\broker_service\model\ProductRetryJob.class
 com\exam\broker_service\repository\ProductRetryRepository.class
+com\exam\broker_service\cor\impl\PersistenceHandler.class
 com\exam\broker_service\repository\OrderRetryRepository.class
 com\exam\broker_service\BrokerServiceApplication.class
 com\exam\broker_service\dto\RetryMessage$StepStatus.class
