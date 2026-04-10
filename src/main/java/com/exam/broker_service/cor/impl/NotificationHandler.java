@@ -2,18 +2,21 @@ package com.exam.broker_service.cor.impl;
 
 import com.exam.broker_service.cor.RetryContext;
 import com.exam.broker_service.cor.RetryHandler;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.JavaMailSender;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
 
-@Slf4j
 @Component
-@RequiredArgsConstructor
 public class NotificationHandler implements RetryHandler {
+    private static final Logger log = LoggerFactory.getLogger(NotificationHandler.class);
     private RetryHandler next;
     private final JavaMailSender mailSender;
+
+    public NotificationHandler(JavaMailSender mailSender) {
+        this.mailSender = mailSender;
+    }
 
     @Override
     public void setNext(RetryHandler next) {

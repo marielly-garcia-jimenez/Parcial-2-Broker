@@ -5,29 +5,41 @@ import com.exam.broker_service.cor.RetryHandler;
 import com.exam.broker_service.model.OrderRetryJob;
 import com.exam.broker_service.model.PaymentRetryJob;
 import com.exam.broker_service.model.ProductRetryJob;
-import com.exam.broker_service.model.RetryJob;
 import com.exam.broker_service.repository.OrderRetryRepository;
 import com.exam.broker_service.repository.PaymentRetryRepository;
 import com.exam.broker_service.repository.ProductRetryRepository;
 import com.exam.broker_service.repository.RetryJobRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
-@Slf4j
 @Component
-@RequiredArgsConstructor
 public class AuditHandler implements RetryHandler {
+    private static final Logger log = LoggerFactory.getLogger(AuditHandler.class);
     private final ProductRetryRepository productRepository;
     private final OrderRetryRepository orderRepository;
     private final PaymentRetryRepository paymentRepository;
     private final RetryJobRepository centralRepository;
     private final MongoTemplate mongoTemplate;
     private final ObjectMapper objectMapper;
+
+    public AuditHandler(ProductRetryRepository productRepository, 
+                        OrderRetryRepository orderRepository, 
+                        PaymentRetryRepository paymentRepository, 
+                        RetryJobRepository centralRepository, 
+                        MongoTemplate mongoTemplate, 
+                        ObjectMapper objectMapper) {
+        this.productRepository = productRepository;
+        this.orderRepository = orderRepository;
+        this.paymentRepository = paymentRepository;
+        this.centralRepository = centralRepository;
+        this.mongoTemplate = mongoTemplate;
+        this.objectMapper = objectMapper;
+    }
 
     @Override
     public void setNext(RetryHandler next) {

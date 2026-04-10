@@ -11,23 +11,33 @@ import com.exam.broker_service.repository.PaymentRetryRepository;
 import com.exam.broker_service.repository.ProductRetryRepository;
 import com.exam.broker_service.repository.RetryJobRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class RetryJobListener {
-
+    private static final Logger log = LoggerFactory.getLogger(RetryJobListener.class);
     private final ProductRetryRepository productRepository;
     private final OrderRetryRepository orderRepository;
     private final PaymentRetryRepository paymentRepository;
     private final RetryJobRepository centralRepository;
     private final ObjectMapper objectMapper;
+
+    public RetryJobListener(ProductRetryRepository productRepository, 
+                            OrderRetryRepository orderRepository, 
+                            PaymentRetryRepository paymentRepository, 
+                            RetryJobRepository centralRepository, 
+                            ObjectMapper objectMapper) {
+        this.productRepository = productRepository;
+        this.orderRepository = orderRepository;
+        this.paymentRepository = paymentRepository;
+        this.centralRepository = centralRepository;
+        this.objectMapper = objectMapper;
+    }
 
     @KafkaListener(topics = {"product_retry_jobs", "order_retry_jobs", "payments_retry_jobs"}, groupId = "broker-group")
     public void listen(RetryMessage message, String topic) {
@@ -43,46 +53,25 @@ public class RetryJobListener {
 
             // 1. Persistencia en la tabla específica
             if (topic.equals("product_retry_jobs")) {
-                specificJob = productRepository.save(ProductRetryJob.builder()
-                        .payload(payloadJson)
-                        .retryCount(0)
-                        .nextRetryTime(now)
-                        .status("PENDING")
-                        .emailStatus(emailStatusJson)
-                        .updateStatus(updateStatusJson)
-                        .build());
+                specificJob = productRepository.save(new ProductRetryJob(payloadJson, 0, now, "PENDING", emailStatusJson, updateStatusJson));
             } else if (topic.equals("order_retry_jobs")) {
-                specificJob = orderRepository.save(OrderRetryJob.builder()
-                        .payload(payloadJson)
-                        .retryCount(0)
-                        .nextRetryTime(now)
-                        .status("PENDING")
-                        .emailStatus(emailStatusJson)
-                        .updateStatus(updateStatusJson)
-                        .build());
+                specificJob = orderRepository.save(new OrderRetryJob(payloadJson, 0, now, "PENDING", emailStatusJson, updateStatusJson));
             } else if (topic.equals("payments_retry_jobs")) {
-                specificJob = paymentRepository.save(PaymentRetryJob.builder()
-                        .payload(payloadJson)
-                        .retryCount(0)
-                        .nextRetryTime(now)
-                        .status("PENDING")
-                        .emailStatus(emailStatusJson)
-                        .updateStatus(updateStatusJson)
-                        .build());
+                specificJob = paymentRepository.save(new PaymentRetryJob(payloadJson, 0, now, "PENDING", emailStatusJson, updateStatusJson));
             }
 
             // 2. Registro centralizado en retry_jobs
             if (specificJob != null) {
-                RetryJob centralJob = RetryJob.builder()
-                        .entityType(serviceName)
-                        .entitySpecificId(specificJob.getId())
-                        .payload(payloadJson)
-                        .retryCount(0)
-                        .status("PENDING")
-                        .createdAt(now)
-                        .updatedAt(now)
-                        .stepStatus("{\"execution\":\"PENDING\", \"email\":\"PENDING\", \"update\":\"PENDING\"}")
-                        .build();
+                RetryJob centralJob = new RetryJob();
+                centralJob.setEntityType(serviceName);
+                centralJob.setEntitySpecificId(specificJob.getId());
+                centralJob.setPayload(payloadJson);
+                centralJob.setRetryCount(0);
+                centralJob.setStatus("PENDING");
+                centralJob.setCreatedAt(now);
+                centralJob.setUpdatedAt(now);
+                centralJob.setStepStatus("{\"execution\":\"PENDING\", \"email\":\"PENDING\", \"update\":\"PENDING\"}");
+                
                 centralRepository.save(centralJob);
                 log.info("Job centralizado persistido en 'retry_jobs' para el servicio: {}", serviceName);
             }

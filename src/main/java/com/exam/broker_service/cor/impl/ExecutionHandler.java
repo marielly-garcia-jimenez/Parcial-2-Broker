@@ -6,12 +6,13 @@ import com.exam.broker_service.feign.OrderClient;
 import com.exam.broker_service.feign.PaymentClient;
 import com.exam.broker_service.feign.ProductClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-@Slf4j
 @Component
 public class ExecutionHandler implements RetryHandler {
+    private static final Logger log = LoggerFactory.getLogger(ExecutionHandler.class);
     private RetryHandler next;
     private final ProductClient productClient;
     private final OrderClient orderClient;
@@ -51,7 +52,7 @@ public class ExecutionHandler implements RetryHandler {
         } catch (Exception e) {
             log.error("Falla en PASO A para el servicio {}: {}", context.getServiceName(), e.getMessage());
             context.setSuccess(false);
-            if (next != null) next.handle(context); // Seguimos para actualizar auditoría aunque falle
+            if (next != null) next.handle(context);
         }
     }
 }

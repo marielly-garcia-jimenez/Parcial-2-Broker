@@ -1,18 +1,10 @@
 package com.exam.broker_service.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "retry_jobs")
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class RetryJob {
 
     @Id
@@ -36,4 +28,78 @@ public class RetryJob {
 
     @Column(columnDefinition = "TEXT")
     private String stepStatus; // Resumen del estado actual de los pasos
+
+    public RetryJob() {}
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getEntityType() {
+        return entityType;
+    }
+
+    public void setEntityType(String entityType) {
+        this.entityType = entityType;
+    }
+
+    public Long getEntitySpecificId() {
+        return entitySpecificId;
+    }
+
+    public void setEntitySpecificId(Long entitySpecificId) {
+        this.entitySpecificId = entitySpecificId;
+    }
+
+    public String getPayload() {
+        return payload;
+    }
+
+    public void setPayload(String payload) {
+        this.payload = payload;
+    }
+
+    public Integer getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(Integer retryCount) {
+        this.retryCount = retryCount;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getStepStatus() {
+        return stepStatus;
+    }
+
+    public void setStepStatus(String stepStatus) {
+        this.stepStatus = stepStatus;
+    }
 }
