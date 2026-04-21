@@ -25,26 +25,17 @@ public class NotificationHandler implements RetryHandler {
 
     @Override
     public void handle(RetryContext context) {
-        log.info("PASO B: Enviando correo de notificación");
-        String message = context.isSuccess() ? "Éxito en reintento" : "Fallo en reintento";
-        String status = context.isSuccess() ? "SUCCESS" : "FAILED";
-        
-        try {
-            SimpleMailMessage mail = new SimpleMailMessage();
-            mail.setTo("admin@example.com");
-            mail.setSubject("Resumen de Reintento: " + context.getServiceName());
-            mail.setText("El job con ID " + context.getJob().getId() + " resultó en: " + message);
-            
-            // mailSender.send(mail); // Simulado
-            
-            context.getJob().setEmailStatus("{\"status\":\"" + status + "\", \"message\":\"" + message + "\"}");
-            log.info("PASO B: Correo enviado ({})", status);
-            
+        if (!context.isSuccess()) {
+            log.info("PASO B: Saltando registro de notificación ya que el reintento falló.");
+            context.addStepResult("B", "SKIPPED");
             if (next != null) next.handle(context);
-        } catch (Exception e) {
-            log.error("Falla en PASO B: {}", e.getMessage());
-            context.getJob().setEmailStatus("{\"status\":\"FAILED\", \"message\":\"" + e.getMessage() + "\"}");
-            if (next != null) next.handle(context);
+            return;
         }
+
+        log.info("PASO B: Marcando paso de notificación como exitoso (el envío real será al final)");
+        context.addStepResult("B", "SUCCESS");
+        context.getJob().setEmailStatus("{\"status\":\"READY\", \"message\":\"Esperando finalización de cadena\"}");
+        
+        if (next != null) next.handle(context);
     }
 }

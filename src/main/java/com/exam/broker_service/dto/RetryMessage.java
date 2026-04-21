@@ -1,8 +1,15 @@
 package com.exam.broker_service.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public class RetryMessage {
+    @JsonProperty("data")
     private Object data;
+    
+    @JsonProperty("sendEmail")
     private StepStatus sendEmail;
+    
+    @JsonProperty("updateRetryJobs")
     private StepStatus updateRetryJobs;
 
     public RetryMessage() {}
@@ -11,6 +18,15 @@ public class RetryMessage {
         this.data = data;
         this.sendEmail = sendEmail;
         this.updateRetryJobs = updateRetryJobs;
+    }
+
+    @Override
+    public String toString() {
+        return "RetryMessage{" +
+                "data=" + data +
+                ", sendEmail=" + sendEmail +
+                ", updateRetryJobs=" + updateRetryJobs +
+                '}';
     }
 
     public Object getData() {
@@ -38,7 +54,10 @@ public class RetryMessage {
     }
 
     public static class StepStatus {
+        @JsonProperty("status")
         private String status;
+        
+        @JsonProperty("message")
         private String message;
 
         public StepStatus() {}
@@ -46,6 +65,14 @@ public class RetryMessage {
         public StepStatus(String status, String message) {
             this.status = status;
             this.message = message;
+        }
+
+        @Override
+        public String toString() {
+            return "StepStatus{" +
+                    "status='" + status + '\'' +
+                    ", message='" + message + '\'' +
+                    '}';
         }
 
         public String getStatus() {

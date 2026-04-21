@@ -40,24 +40,39 @@ public class RetryJobListener {
     }
 
     @KafkaListener(topics = {"product_retry_jobs", "order_retry_jobs", "payments_retry_jobs"}, groupId = "broker-group")
-    public void listen(RetryMessage message, String topic) {
-        log.info("Mensaje recibido de Kafka en tópico {}: {}", topic, message);
+    public void listen(RetryMessage message, @org.springframework.messaging.handler.annotation.Header(org.springframework.kafka.support.KafkaHeaders.RECEIVED_TOPIC) String topic) {
+        log.info("KAFKA: Recibido mensaje en tópico {}. Contenido: {}", topic, message);
+        
         try {
             String serviceName = topic.split("_")[0].toUpperCase();
-            String payloadJson = objectMapper.writeValueAsString(message.getData());
-            String emailStatusJson = objectMapper.writeValueAsString(message.getSendEmail());
-            String updateStatusJson = objectMapper.writeValueAsString(message.getUpdateRetryJobs());
+            String payloadJson;
+            
+            if (message != null && message.getData() != null) {
+                payloadJson = objectMapper.writeValueAsString(message.getData());
+                log.info("PAYLOAD DETECTADO ({}): {}", serviceName, payloadJson);
+            } else {
+                log.warn("¡ADVERTENCIA!: El campo 'data' llegó nulo. Verifique que el JSON de Kafka tenga la llave 'data' en minúsculas.");
+                payloadJson = "{\"error\":\"El mensaje original no contenía el campo 'data'\"}";
+            }
+            
+            // Si por alguna razón Jackson devolvió la palabra "null"
+            if (payloadJson == null || payloadJson.equals("null")) {
+                payloadJson = "{\"error\":\"Falla en serialización de Jackson\"}";
+            }
+
+            String emailStatusJson = (message != null && message.getSendEmail() != null) ? objectMapper.writeValueAsString(message.getSendEmail()) : "{\"status\":\"PENDING\"}";
+            String updateStatusJson = (message != null && message.getUpdateRetryJobs() != null) ? objectMapper.writeValueAsString(message.getUpdateRetryJobs()) : "{\"status\":\"PENDING\"}";
             
             BaseRetryJob specificJob = null;
             LocalDateTime now = LocalDateTime.now();
 
             // 1. Persistencia en la tabla específica
             if (topic.equals("product_retry_jobs")) {
-                specificJob = productRepository.save(new ProductRetryJob(payloadJson, 0, now, "PENDING", emailStatusJson, updateStatusJson));
+                specificJob = productRepository.save(new ProductRetryJob(payloadJson, 0, now, "SCHEDULED", emailStatusJson, updateStatusJson));
             } else if (topic.equals("order_retry_jobs")) {
-                specificJob = orderRepository.save(new OrderRetryJob(payloadJson, 0, now, "PENDING", emailStatusJson, updateStatusJson));
+                specificJob = orderRepository.save(new OrderRetryJob(payloadJson, 0, now, "SCHEDULED", emailStatusJson, updateStatusJson));
             } else if (topic.equals("payments_retry_jobs")) {
-                specificJob = paymentRepository.save(new PaymentRetryJob(payloadJson, 0, now, "PENDING", emailStatusJson, updateStatusJson));
+                specificJob = paymentRepository.save(new PaymentRetryJob(payloadJson, 0, now, "SCHEDULED", emailStatusJson, updateStatusJson));
             }
 
             // 2. Registro centralizado en retry_jobs
@@ -67,10 +82,10 @@ public class RetryJobListener {
                 centralJob.setEntitySpecificId(specificJob.getId());
                 centralJob.setPayload(payloadJson);
                 centralJob.setRetryCount(0);
-                centralJob.setStatus("PENDING");
+                centralJob.setStatus("SCHEDULED");
                 centralJob.setCreatedAt(now);
                 centralJob.setUpdatedAt(now);
-                centralJob.setStepStatus("{\"execution\":\"PENDING\", \"email\":\"PENDING\", \"update\":\"PENDING\"}");
+                centralJob.setStepStatus("{\"execution\":\"SCHEDULED\", \"email\":\"SCHEDULED\", \"update\":\"SCHEDULED\"}");
                 
                 centralRepository.save(centralJob);
                 log.info("Job centralizado persistido en 'retry_jobs' para el servicio: {}", serviceName);

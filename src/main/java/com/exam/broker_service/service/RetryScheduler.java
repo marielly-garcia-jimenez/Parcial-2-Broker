@@ -60,27 +60,30 @@ public class RetryScheduler {
         LocalDateTime now = LocalDateTime.now();
         
         // Procesar Productos con chequeo de Idempotencia
-        List<ProductRetryJob> productJobs = productRepository.findByStatusAndNextRetryTimeBefore("PENDING", now);
+        List<ProductRetryJob> productJobs = productRepository.findByStatusAndNextRetryTimeBefore("SCHEDULED", now);
         for (ProductRetryJob job : productJobs) {
-            if ("PENDING".equals(job.getStatus())) { // Idempotencia básica
-                executionHandler.handle(new RetryContext(job, "product", false));
-            }
+            job.setStatus("PROCESSING");
+            productRepository.save(job);
+            RetryContext context = RetryContext.builder().job(job).serviceName("product").success(false).build();
+            executionHandler.handle(context);
         }
 
         // Procesar Ordenes
-        List<OrderRetryJob> orderJobs = orderRepository.findByStatusAndNextRetryTimeBefore("PENDING", now);
+        List<OrderRetryJob> orderJobs = orderRepository.findByStatusAndNextRetryTimeBefore("SCHEDULED", now);
         for (OrderRetryJob job : orderJobs) {
-            if ("PENDING".equals(job.getStatus())) {
-                executionHandler.handle(new RetryContext(job, "order", false));
-            }
+            job.setStatus("PROCESSING");
+            orderRepository.save(job);
+            RetryContext context = RetryContext.builder().job(job).serviceName("order").success(false).build();
+            executionHandler.handle(context);
         }
 
         // Procesar Pagos
-        List<PaymentRetryJob> paymentJobs = paymentRepository.findByStatusAndNextRetryTimeBefore("PENDING", now);
+        List<PaymentRetryJob> paymentJobs = paymentRepository.findByStatusAndNextRetryTimeBefore("SCHEDULED", now);
         for (PaymentRetryJob job : paymentJobs) {
-            if ("PENDING".equals(job.getStatus())) {
-                executionHandler.handle(new RetryContext(job, "payments", false));
-            }
+            job.setStatus("PROCESSING");
+            paymentRepository.save(job);
+            RetryContext context = RetryContext.builder().job(job).serviceName("payments").success(false).build();
+            executionHandler.handle(context);
         }
     }
 }

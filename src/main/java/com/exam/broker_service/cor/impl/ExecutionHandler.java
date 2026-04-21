@@ -47,11 +47,13 @@ public class ExecutionHandler implements RetryHandler {
             }
             
             context.setSuccess(true);
+            context.addStepResult("A", "SUCCESS");
             log.info("Ejecución exitosa (PASO A) para el servicio: {}", service);
             if (next != null) next.handle(context);
         } catch (Exception e) {
             log.error("Falla en PASO A para el servicio {}: {}", context.getServiceName(), e.getMessage());
             context.setSuccess(false);
+            context.addStepResult("A", "FAILED");
             if (next != null) next.handle(context);
         }
     }

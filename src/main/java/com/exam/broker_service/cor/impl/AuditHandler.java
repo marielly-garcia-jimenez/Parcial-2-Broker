@@ -9,8 +9,19 @@ import com.exam.broker_service.repository.OrderRetryRepository;
 import com.exam.broker_service.repository.PaymentRetryRepository;
 import com.exam.broker_service.repository.ProductRetryRepository;
 import com.exam.broker_service.repository.RetryJobRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
+
+import com.exam.broker_service.repository.RetryJobRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -22,15 +33,21 @@ public class AuditHandler implements RetryHandler {
     private final OrderRetryRepository orderRepository;
     private final PaymentRetryRepository paymentRepository;
     private final RetryJobRepository centralRepository;
+    private final ObjectMapper objectMapper;
+    private final JavaMailSender mailSender;
 
     public AuditHandler(ProductRetryRepository productRepository, 
                         OrderRetryRepository orderRepository, 
                         PaymentRetryRepository paymentRepository, 
-                        RetryJobRepository centralRepository) {
+                        RetryJobRepository centralRepository,
+                        ObjectMapper objectMapper,
+                        JavaMailSender mailSender) {
         this.productRepository = productRepository;
         this.orderRepository = orderRepository;
         this.paymentRepository = paymentRepository;
         this.centralRepository = centralRepository;
+        this.objectMapper = objectMapper;
+        this.mailSender = mailSender;
     }
 
     @Override
@@ -41,25 +58,54 @@ public class AuditHandler implements RetryHandler {
     @Override
     public void handle(RetryContext context) {
         log.info("PASO D: Auditando resultado final en PostgreSQL");
+        context.addStepResult("D", "SUCCESS");
         String statusStr = context.isSuccess() ? "SUCCESS" : "FAILED";
         LocalDateTime now = LocalDateTime.now();
         
         try {
             if (context.isSuccess()) {
                 context.getJob().setStatus("SUCCESS");
-            } else {
-                int retryCount = context.getJob().getRetryCount() + 1;
-                context.getJob().setRetryCount(retryCount);
-                // Formula Prompt: NOW() + (10s * 2^retryCount)
-                long delay = 10L * (long) Math.pow(2, retryCount);
-                context.getJob().setNextRetryTime(now.plusSeconds(delay));
+                context.getJob().setNextRetryTime(null);
                 
-                if (retryCount >= 5) {
+                // --- ENVÍO DE CORREO ÚNICAMENTE EN ÉXITO TOTAL ---
+                try {
+                    String sender = System.getenv("MAIL_USERNAME");
+                    SimpleMailMessage mail = new SimpleMailMessage();
+                    mail.setFrom(sender);
+                    mail.setTo(sender);
+                    mail.setSubject("¡PROCESO COMPLETADO!: " + context.getServiceName());
+                    mail.setText("Todos los pasos (A, B, C, D) se completaron con éxito para el Job ID: " + context.getJob().getId());
+                    mailSender.send(mail);
+                    log.info("PASO D: Correo de éxito total enviado.");
+                    context.getJob().setEmailStatus("{\"status\":\"SUCCESS\", \"message\":\"Correo enviado tras éxito total\"}");
+                } catch (Exception mailError) {
+                    log.error("Error enviando correo final: {}", mailError.getMessage());
+                }
+                // -------------------------------------------------
+
+            } else {
+                int nextRetryCount = context.getJob().getRetryCount() + 1;
+                context.getJob().setRetryCount(nextRetryCount);
+                
+                if (nextRetryCount >= 5) {
                     context.getJob().setStatus("FAILED");
+                    context.getJob().setNextRetryTime(null); // Detener para siempre
+                    log.error("¡LÍMITE ALCANZADO!: El Job de {} ha fallado 5 veces. Se detiene el proceso.", context.getServiceName());
+                } else {
+                    context.getJob().setStatus("SCHEDULED");
+                    long delay = 10L * (long) Math.pow(2, nextRetryCount);
+                    context.getJob().setNextRetryTime(now.plusSeconds(delay));
+                    log.info("Reintento #{} programado para: {}", nextRetryCount, context.getJob().getNextRetryTime());
                 }
             }
             
-            context.getJob().setUpdateStatus("{\"status\":\"" + statusStr + "\", \"message\":\"Paso D completado\"}");
+            // SIEMPRE generamos el JSON detallado aquí
+            java.util.Map<String, Object> finalStatusMap = new java.util.HashMap<>();
+            finalStatusMap.put("status", context.getJob().getStatus());
+            finalStatusMap.put("retryCount", context.getJob().getRetryCount());
+            finalStatusMap.put("steps", context.getStepResults());
+            
+            context.getJob().setUpdateStatus(objectMapper.writeValueAsString(finalStatusMap));
 
             // 1. Persistencia en tabla especifica
             String service = context.getServiceName();
@@ -77,14 +123,18 @@ public class AuditHandler implements RetryHandler {
                     centralJob.setStatus(context.getJob().getStatus());
                     centralJob.setRetryCount(context.getJob().getRetryCount());
                     centralJob.setUpdatedAt(now);
-                    centralJob.setStepStatus(String.format("{\"A\":\"%s\", \"B\":\"SUCCESS\", \"C\":\"%s\", \"D\":\"SUCCESS\"}", 
-                        statusStr, context.isSuccess() ? "SUCCESS" : "SKIPPED"));
+                    try {
+                        centralJob.setStepStatus(objectMapper.writeValueAsString(context.getStepResults()));
+                    } catch (Exception e) {
+                        centralJob.setStepStatus("{\"error\":\"Could not serialize step results\"}");
+                    }
                     centralRepository.save(centralJob);
                 });
 
             log.info("PASO D: Auditoria finalizada ({})", statusStr);
         } catch (Exception e) {
             log.error("Falla critica en PASO D: {}", e.getMessage());
+            context.addStepResult("D", "FAILED");
         }
     }
 }

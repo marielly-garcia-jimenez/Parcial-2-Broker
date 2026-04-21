@@ -29,6 +29,8 @@ public class PersistenceHandler implements RetryHandler {
     public void handle(RetryContext context) {
         if (!context.isSuccess()) {
             log.info("PASO C: Saltando persistencia en MongoDB debido a que el reintento falló.");
+            context.getJob().setUpdateStatus("{\"status\":\"SKIPPED\", \"message\":\"Reintento previo falló\"}");
+            context.addStepResult("C", "SKIPPED");
             if (next != null) next.handle(context);
             return;
         }
@@ -38,9 +40,13 @@ public class PersistenceHandler implements RetryHandler {
             Object payload = objectMapper.readValue(context.getJob().getPayload(), Object.class);
             mongoTemplate.save(payload, "recovered_data_" + context.getServiceName());
             log.info("PASO C: Datos guardados en colección 'recovered_data_{}'", context.getServiceName());
+            context.getJob().setUpdateStatus("{\"status\":\"SUCCESS\", \"message\":\"Datos persistidos en MongoDB\"}");
+            context.addStepResult("C", "SUCCESS");
             if (next != null) next.handle(context);
         } catch (Exception e) {
             log.error("Falla en PASO C (MongoDB): {}", e.getMessage());
+            context.getJob().setUpdateStatus("{\"status\":\"FAILED\", \"message\":\"" + e.getMessage() + "\"}");
+            context.addStepResult("C", "FAILED");
             if (next != null) next.handle(context);
         }
     }

@@ -1,18 +1,22 @@
 package com.exam.broker_service.cor;
 
 import com.exam.broker_service.model.BaseRetryJob;
+import java.util.HashMap;
+import java.util.Map;
 
 public class RetryContext {
     private BaseRetryJob job;
     private String serviceName; // product, order, payments
     private boolean success;
+    private Map<String, String> stepResults = new HashMap<>();
 
     public RetryContext() {}
 
-    public RetryContext(BaseRetryJob job, String serviceName, boolean success) {
+    public RetryContext(BaseRetryJob job, String serviceName, boolean success, Map<String, String> stepResults) {
         this.job = job;
         this.serviceName = serviceName;
         this.success = success;
+        this.stepResults = stepResults != null ? stepResults : new HashMap<>();
     }
 
     public static RetryContextBuilder builder() {
@@ -43,10 +47,19 @@ public class RetryContext {
         this.success = success;
     }
 
+    public Map<String, String> getStepResults() {
+        return stepResults;
+    }
+
+    public void addStepResult(String step, String status) {
+        this.stepResults.put(step, status);
+    }
+
     public static class RetryContextBuilder {
         private BaseRetryJob job;
         private String serviceName;
         private boolean success;
+        private Map<String, String> stepResults = new HashMap<>();
 
         public RetryContextBuilder job(BaseRetryJob job) {
             this.job = job;
@@ -63,8 +76,13 @@ public class RetryContext {
             return this;
         }
 
+        public RetryContextBuilder stepResults(Map<String, String> stepResults) {
+            this.stepResults = stepResults;
+            return this;
+        }
+
         public RetryContext build() {
-            return new RetryContext(job, serviceName, success);
+            return new RetryContext(job, serviceName, success, stepResults);
         }
     }
 }
