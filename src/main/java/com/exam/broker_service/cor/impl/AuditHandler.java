@@ -66,23 +66,6 @@ public class AuditHandler implements RetryHandler {
             if (context.isSuccess()) {
                 context.getJob().setStatus("SUCCESS");
                 context.getJob().setNextRetryTime(null);
-                
-                // --- ENVÍO DE CORREO ÚNICAMENTE EN ÉXITO TOTAL ---
-                try {
-                    String sender = System.getenv("MAIL_USERNAME");
-                    SimpleMailMessage mail = new SimpleMailMessage();
-                    mail.setFrom(sender);
-                    mail.setTo(sender);
-                    mail.setSubject("¡PROCESO COMPLETADO!: " + context.getServiceName());
-                    mail.setText("Todos los pasos (A, B, C, D) se completaron con éxito para el Job ID: " + context.getJob().getId());
-                    mailSender.send(mail);
-                    log.info("PASO D: Correo de éxito total enviado.");
-                    context.getJob().setEmailStatus("{\"status\":\"SUCCESS\", \"message\":\"Correo enviado tras éxito total\"}");
-                } catch (Exception mailError) {
-                    log.error("Error enviando correo final: {}", mailError.getMessage());
-                }
-                // -------------------------------------------------
-
             } else {
                 int nextRetryCount = context.getJob().getRetryCount() + 1;
                 context.getJob().setRetryCount(nextRetryCount);
