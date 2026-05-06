@@ -87,6 +87,21 @@ public class AuditHandler implements RetryHandler {
                 int nextRetryCount = context.getJob().getRetryCount() + 1;
                 context.getJob().setRetryCount(nextRetryCount);
                 
+                // --- ENVÍO DE CORREO EN CASO DE FALLO ---
+                try {
+                    String sender = System.getenv("MAIL_USERNAME");
+                    SimpleMailMessage mail = new SimpleMailMessage();
+                    mail.setFrom(sender);
+                    mail.setTo(sender);
+                    mail.setSubject("¡PROCESO FALLIDO!: " + context.getServiceName());
+                    mail.setText("El proceso ha fallado en alguno de los pasos para el Job ID: " + context.getJob().getId() + ". Reintento #" + nextRetryCount);
+                    mailSender.send(mail);
+                    log.info("PASO D: Correo de fallo enviado.");
+                } catch (Exception mailError) {
+                    log.error("Error enviando correo de fallo: {}", mailError.getMessage());
+                }
+                // -----------------------------------------
+
                 if (nextRetryCount >= 5) {
                     context.getJob().setStatus("FAILED");
                     context.getJob().setNextRetryTime(null); // Detener para siempre

@@ -22,11 +22,9 @@ spring:
       group-id: broker-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       properties:
         spring.json.trusted.packages: "*"
-        spring.json.value.default.type: "com.exam.broker_service.dto.RetryMessage"
-        spring.json.use.type.headers: false
   mail:
     host: smtp.gmail.com
     port: 587

@@ -1,6 +1,7 @@
 com\exam\broker_service\cor\impl\ExecutionHandler.class
 com\exam\broker_service\model\BaseRetryJob.class
 com\exam\broker_service\model\PaymentRetryJob.class
+com\exam\broker_service\config\KafkaConfig.class
 com\exam\broker_service\cor\RetryContext$RetryContextBuilder.class
 com\exam\broker_service\cor\RetryContext.class
 com\exam\broker_service\listener\RetryJobListener.class
@@ -8,6 +9,7 @@ com\exam\broker_service\repository\RetryJobRepository.class
 com\exam\broker_service\repository\PaymentRetryRepository.class
 com\exam\broker_service\model\RetryJob.class
 com\exam\broker_service\cor\RetryHandler.class
+com\exam\broker_service\service\ShippingScheduler.class
 com\exam\broker_service\cor\impl\AuditHandler.class
 com\exam\broker_service\service\RetryScheduler.class
 com\exam\broker_service\cor\impl\NotificationHandler.class
@@ -17,8 +19,11 @@ com\exam\broker_service\model\ProductRetryJob.class
 com\exam\broker_service\repository\ProductRetryRepository.class
 com\exam\broker_service\cor\impl\PersistenceHandler.class
 com\exam\broker_service\repository\OrderRetryRepository.class
+com\exam\broker_service\model\ShippingRecord.class
+com\exam\broker_service\listener\BusinessFlowListener.class
 com\exam\broker_service\BrokerServiceApplication.class
 com\exam\broker_service\dto\RetryMessage$StepStatus.class
+com\exam\broker_service\repository\ShippingRepository.class
 com\exam\broker_service\feign\PaymentClient.class
 com\exam\broker_service\feign\ProductClient.class
 com\exam\broker_service\dto\RetryMessage.class

@@ -39,43 +39,41 @@ public class RetryJobListener {
         this.objectMapper = objectMapper;
     }
 
-    @KafkaListener(topics = {"product_retry_jobs", "order_retry_jobs", "payments_retry_jobs"}, groupId = "broker-group")
-    public void listen(RetryMessage message, @org.springframework.messaging.handler.annotation.Header(org.springframework.kafka.support.KafkaHeaders.RECEIVED_TOPIC) String topic) {
-        log.info("KAFKA: Recibido mensaje en tópico {}. Contenido: {}", topic, message);
+    @KafkaListener(topics = {"product_retry_jobs", "order_retry_jobs", "payments_retry_jobs"}, groupId = "broker-retry-group")
+    public void listen(String messageJson, @org.springframework.messaging.handler.annotation.Header(org.springframework.kafka.support.KafkaHeaders.RECEIVED_TOPIC) String topic) {
+        log.info("KAFKA RETRY: Recibido en tópico {}: {}", topic, messageJson);
         
         try {
+            RetryMessage message = objectMapper.readValue(messageJson, RetryMessage.class);
             String serviceName = topic.split("_")[0].toUpperCase();
             String payloadJson;
             
-            if (message != null && message.getData() != null) {
-                payloadJson = objectMapper.writeValueAsString(message.getData());
-                log.info("PAYLOAD DETECTADO ({}): {}", serviceName, payloadJson);
+            Object dataObj = message.getData();
+            if (dataObj != null) {
+                if (dataObj instanceof java.util.Map && ((java.util.Map)dataObj).containsKey("data")) {
+                    payloadJson = objectMapper.writeValueAsString(((java.util.Map)dataObj).get("data"));
+                } else {
+                    payloadJson = objectMapper.writeValueAsString(dataObj);
+                }
             } else {
-                log.warn("¡ADVERTENCIA!: El campo 'data' llegó nulo. Verifique que el JSON de Kafka tenga la llave 'data' en minúsculas.");
-                payloadJson = "{\"error\":\"El mensaje original no contenía el campo 'data'\"}";
+                payloadJson = "{\"error\":\"Datos nulos\"}";
             }
             
-            // Si por alguna razón Jackson devolvió la palabra "null"
-            if (payloadJson == null || payloadJson.equals("null")) {
-                payloadJson = "{\"error\":\"Falla en serialización de Jackson\"}";
-            }
+            String emailStatusJson = (message.getSendEmail() != null) ? objectMapper.writeValueAsString(message.getSendEmail()) : "{\"status\":\"PENDING\"}";
+            String updateStatusJson = (message.getUpdateRetryJobs() != null) ? objectMapper.writeValueAsString(message.getUpdateRetryJobs()) : "{\"status\":\"PENDING\"}";
 
-            String emailStatusJson = (message != null && message.getSendEmail() != null) ? objectMapper.writeValueAsString(message.getSendEmail()) : "{\"status\":\"PENDING\"}";
-            String updateStatusJson = (message != null && message.getUpdateRetryJobs() != null) ? objectMapper.writeValueAsString(message.getUpdateRetryJobs()) : "{\"status\":\"PENDING\"}";
-            
             BaseRetryJob specificJob = null;
             LocalDateTime now = LocalDateTime.now();
+            LocalDateTime firstRetry = now.plusSeconds(10);
 
-            // 1. Persistencia en la tabla específica
             if (topic.equals("product_retry_jobs")) {
-                specificJob = productRepository.save(new ProductRetryJob(payloadJson, 0, now, "SCHEDULED", emailStatusJson, updateStatusJson));
+                specificJob = productRepository.save(new ProductRetryJob(payloadJson, 0, firstRetry, "SCHEDULED", emailStatusJson, updateStatusJson));
             } else if (topic.equals("order_retry_jobs")) {
-                specificJob = orderRepository.save(new OrderRetryJob(payloadJson, 0, now, "SCHEDULED", emailStatusJson, updateStatusJson));
+                specificJob = orderRepository.save(new OrderRetryJob(payloadJson, 0, firstRetry, "SCHEDULED", emailStatusJson, updateStatusJson));
             } else if (topic.equals("payments_retry_jobs")) {
-                specificJob = paymentRepository.save(new PaymentRetryJob(payloadJson, 0, now, "SCHEDULED", emailStatusJson, updateStatusJson));
+                specificJob = paymentRepository.save(new PaymentRetryJob(payloadJson, 0, firstRetry, "SCHEDULED", emailStatusJson, updateStatusJson));
             }
 
-            // 2. Registro centralizado en retry_jobs
             if (specificJob != null) {
                 RetryJob centralJob = new RetryJob();
                 centralJob.setEntityType(serviceName);
@@ -86,13 +84,10 @@ public class RetryJobListener {
                 centralJob.setCreatedAt(now);
                 centralJob.setUpdatedAt(now);
                 centralJob.setStepStatus("{\"execution\":\"SCHEDULED\", \"email\":\"SCHEDULED\", \"update\":\"SCHEDULED\"}");
-                
                 centralRepository.save(centralJob);
-                log.info("Job centralizado persistido en 'retry_jobs' para el servicio: {}", serviceName);
             }
-
         } catch (Exception e) {
-            log.error("Error al procesar mensaje de Kafka y centralizar en 'retry_jobs': {}", e.getMessage());
+            log.error("Error procesando reintento: {}", e.getMessage());
         }
     }
 }
